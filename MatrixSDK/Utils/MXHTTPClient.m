@@ -45,6 +45,14 @@ NSString* const kMXHTTPClientUserConsentNotGivenErrorNotificationConsentURIKey =
 NSString* const kMXHTTPClientMatrixErrorNotification = @"kMXHTTPClientMatrixErrorNotification";
 NSString* const kMXHTTPClientMatrixErrorNotificationErrorKey = @"kMXHTTPClientMatrixErrorNotificationErrorKey";
 
+#if DEBUG2
+NSString * const MXHTTPClientDidCollectMetricsNotification =
+    @"MXHTTPClientDidCollectMetricsNotification";
+
+static NSUInteger chaosDelayMs = 0;
+static NSUInteger chaosJitterMs = 0;
+static double chaosDropRate = 0;
+#endif
 
 static NSUInteger requestCount = 0;
 
@@ -112,6 +120,22 @@ static NSUInteger requestCount = 0;
     {
         self.isAuthenticatedClient = authenticated;
         httpManager = [[AFHTTPSessionManager alloc] initWithBaseURL:[NSURL URLWithString:baseURL]];
+        
+#if DEBUG2
+    [httpManager setTaskDidFinishCollectingMetricsBlock:
+     ^(NSURLSession *session,
+       NSURLSessionTask *task,
+       NSURLSessionTaskMetrics *metrics)
+    {
+        [[NSNotificationCenter defaultCenter]
+         postNotificationName:MXHTTPClientDidCollectMetricsNotification
+         object:nil
+         userInfo:@{
+             @"task": task,
+             @"metrics": metrics
+         }];
+    }];
+#endif
 
         [self setDefaultSecurityPolicy];
 
@@ -337,6 +361,26 @@ static NSUInteger requestCount = 0;
     NSUInteger requestNumber = requestCount++;
 
     MXLogDebug(@"[MXHTTPClient] #%@ - %@ %@", @(requestNumber), httpMethod, path);
+
+    #if DEBUG2
+    @synchronized ([MXHTTPClient class]) {
+        if (chaosDropRate > 0) {
+            double randomValue = (double)arc4random() / (double)UINT32_MAX;
+            if (randomValue < chaosDropRate) {
+                NSError *chaosError =
+                [NSError errorWithDomain:NSURLErrorDomain
+                                     code:NSURLErrorNetworkConnectionLost
+                                 userInfo:@{
+                    NSLocalizedDescriptionKey:
+                        @"Chaos: simulated network connection lost"
+                }];
+
+                failure(chaosError);
+                return;
+            }
+        }
+    }
+    #endif
 
     mxHTTPOperation.numberOfTries++;
     mxHTTPOperation.operation = [httpManager dataTaskWithRequest:request uploadProgress:^(NSProgress * _Nonnull theUploadProgress) {
@@ -971,7 +1015,41 @@ static NSUInteger requestCount = 0;
         }
     }
 
+#if DEBUG2
+    @synchronized ([MXHTTPClient class]) {
+        delayMs += chaosDelayMs;
+
+        if (chaosJitterMs > 0) {
+            delayMs += arc4random_uniform((uint32_t)MIN(chaosJitterMs, UINT32_MAX - 1)) + 1;
+        }
+    }
+#endif
+
     return delayMs;
 }
 
+#if DEBUG2
+
++ (void)setChaosDelay:(NSUInteger)delayMs
+{
+    @synchronized ([MXHTTPClient class]) {
+        chaosDelayMs = delayMs;
+    }
+}
+
++ (void)setJitter:(NSUInteger)jitterMs
+{
+    @synchronized ([MXHTTPClient class]) {
+        chaosJitterMs = jitterMs;
+    }
+}
+
++ (void)setChaosDropRate:(double)dropRate
+{
+    @synchronized ([MXHTTPClient class]) {
+        chaosDropRate = MIN(MAX(dropRate, 0.0), 1.0);
+    }
+}
+
+#endif
 @end

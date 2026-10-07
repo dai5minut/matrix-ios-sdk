@@ -41,6 +41,10 @@ FOUNDATION_EXPORT NSString* const kMXHTTPClientUserConsentNotGivenErrorNotificat
 FOUNDATION_EXPORT NSString* const kMXHTTPClientMatrixErrorNotification;
 FOUNDATION_EXPORT NSString* const kMXHTTPClientMatrixErrorNotificationErrorKey;
 
+#if DEBUG2
+FOUNDATION_EXPORT NSString * const MXHTTPClientDidCollectMetricsNotification;
+#endif
+
 /**
  Block called when an authentication challenge from a server failed whereas a certificate is present in certificate chain.
  

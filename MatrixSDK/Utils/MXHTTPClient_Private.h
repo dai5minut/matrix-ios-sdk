@@ -42,4 +42,10 @@
  */
 + (void)removeAllDelays;
 
+#if DEBUG2
++ (void)setChaosDelay:(NSUInteger)delayMs;
++ (void)setJitter:(NSUInteger)jitterMs;
++ (void)setChaosDropRate:(double)dropRate;
+#endif
+
 @end
